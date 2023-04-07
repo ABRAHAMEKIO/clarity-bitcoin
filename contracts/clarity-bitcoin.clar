@@ -682,14 +682,14 @@
 ;; * if the ith bit is 0, then cur-hash is hashed before the next proof-hash (cur-hash is "left").
 ;; * if the ith bit is 1, then the next proof-hash is hashed before cur-hash (cur-hash is "right").
 ;; The proof verifies if cur-hash is equal to root-hash, and we're out of proof-hashes to check.
-(define-read-only (inner-merkle-proof-verify (ctr uint) (state { path: uint, root-hash: (buff 32), proof-hashes: (list 12 (buff 32)), tree-depth: uint, cur-hash: (buff 32), verified: bool }))
+(define-read-only (inner-merkle-proof-verify (ctr uint) (state { path: uint, root-hash: (buff 32), proof-hashes: (list 12 (buff 32)), tree_depth: uint, cur-hash: (buff 32), verified: bool }))
     (if (get verified state)
         state
-        (if (>= ctr (get tree-depth state))
+        (if (>= ctr (get tree_depth state))
             (begin
                 (print "ctr exceeds proof length or tree depth")
                 (print ctr)
-                (print (get tree-depth state))
+                (print (get tree_depth state))
                 (print (len (get proof-hashes state)))
                 (merge state { verified: false })
             )
@@ -729,16 +729,16 @@
 ;; Returns (ok false) if the proof is invalid.
 ;; Returns (err ERR-PROOF-TOO-SHORT) if the proof's hashes aren't long enough to link the txid to the merkle root.
 (define-read-only (verify-merkle-proof (reversed-txid (buff 32)) (merkle-root (buff 32)) (proof { tx-index: uint,
-  hashes: (list 12 (buff 32)), tree-depth: uint }))
-    (if (> (get tree-depth proof) (len (get hashes proof)))
+  hashes: (list 12 (buff 32)), tree_depth: uint }))
+    (if (> (get tree_depth proof) (len (get hashes proof)))
         (err ERR-PROOF-TOO-SHORT)
         (ok
           (get verified
               (fold inner-merkle-proof-verify
                   (list u0 u1 u2 u3 u4 u5 u6 u7 u8 u9 u10 u11)
-                  { path: (+ (pow u2 (get tree-depth proof)) (get tx-index proof)),
+                  { path: (+ (pow u2 (get tree_depth proof)) (get tx-index proof)),
                    root-hash: merkle-root, proof-hashes: (get hashes proof), cur-hash: reversed-txid,
-                    tree-depth: (get tree-depth proof), verified: false }))
+                    tree_depth: (get tree_depth proof), verified: false }))
         )
     )
 )
@@ -757,16 +757,16 @@
 ;; Returns (ok true) if the proof checks out.
 ;; Returns (ok false) if not.
 ;; Returns (err ERR-PROOF-TOO-SHORT) if the proof doesn't contain enough intermediate hash nodes in the merkle tree.
-(define-read-only (was-tx-mined-compact (block { header: (buff 80), height: uint }) (tx (buff 1024)) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint }))
+(define-read-only (was-tx-mined-compact (block { header: (buff 80), height: uint }) (tx (buff 1024)) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree_depth: uint }))
     (if (verify-block-header (get header block) (get height block))
         (verify-merkle-proof (get-reversed-txid tx) (reverse-buff32 (get merkle-root (try! (parse-block-header (get header block))))) proof)
         (ok false)
     )
 )
 
-(define-read-only (concat-header (block { version: (buff 4), parent: (buff 32), merkle-root: (buff 32), timestamp: (buff 4), nbits: (buff 4), nonce: (buff 4), height: uint }))
+(define-read-only (concat-header (block { version: (buff 4), parent: (buff 32), merkle_root: (buff 32), timestamp: (buff 4), nbits: (buff 4), nonce: (buff 4), height: uint }))
   (concat (concat (concat (concat (concat (get version block) (get parent block))
-   (get merkle-root block)) (get timestamp block)) (get nbits block)) (get nonce block))
+   (get merkle_root block)) (get timestamp block)) (get nbits block)) (get nonce block))
 )
 
 (define-read-only (concat-var (buffer (buff 256)))
@@ -797,30 +797,30 @@
 ;; why do we need to concat the block data to match the block header parameter
 ;;-because the blockheader comprizes of the time nonce nbits merke root and height
 ;; -merkle root is derived from the hashes of all transactions in the block
-(define-read-only (was-tx-mined (block { version: (buff 4), parent: (buff 32), merkle-root: (buff 32), 
+(define-read-only (was-tx-mined (block { version: (buff 4), parent: (buff 32), merkle_root: (buff 32), 
 timestamp: (buff 4), nbits: (buff 4), nonce: (buff 4), height: uint })
- (tx (buff 1024)) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint }))
+ (tx (buff 1024)) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree_depth: uint }))
     (if (verify-block-header (concat-header block) (get height block))
-        (verify-merkle-proof (get-reversed-txid tx) (get merkle-root block) proof)
+        (verify-merkle-proof (get-reversed-txid tx) (get merkle_root block) proof)
         (err u1)
     )
 )
 
+
 ;; verifies if the transaction's merkle proof links to the block header's merkle root.
-(define-public (was-tx-mined-verify-merkleproof (block { version: (buff 4), parent: (buff 32), merkle-root: (buff 32), timestamp: (buff 4), nbits: (buff 4), nonce: (buff 4), height: uint }) 
- (tx (buff 1024)) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint }))
+(define-public (was-tx-mined-verify-merkleproof (block { version: (buff 4), parent: (buff 32),
+ merkle_root: (buff 32), timestamp: (buff 4), nbits: (buff 4), nonce: (buff 4), height: uint }) 
+ (tx (buff 1024)) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree_depth: uint }))
    (begin 
-     (unwrap! (unwrap-panic (some (verify-merkle-proof (get-reversed-txid tx) (get merkle-root block) proof))) (err u1))
-    (ok {data: block,event: true,proof: proof})
+     (unwrap! (unwrap-panic (some (verify-merkle-proof (get-reversed-txid tx) (get merkle_root block) proof))) (err u1))
+    (ok {data: (concat-header block),event: true,proof: proof})
    )
 ) 
 
 ;; verifies that the blockheader  corresponds with the block that was mined at the given height
-(define-read-only (was-tx-mined-verify-blockheader (block { version: (buff 4), parent: (buff 32), merkle-root: (buff 32), timestamp: (buff 4), nbits: (buff 4), nonce: (buff 4), height: uint }) 
- (tx (buff 1024)) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint }))
+(define-read-only (was-tx-mined-verify-blockheader (bh (buff 80)) (h uint))
    (if 
-   (verify-block-header (concat-header block) (get height block))
+      (verify-block-header bh h)
      (ok true)
     (err u2))
- )
-
+)

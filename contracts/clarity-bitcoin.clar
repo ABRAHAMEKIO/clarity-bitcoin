@@ -639,15 +639,19 @@
 (define-read-only (get-bc-h-hash (bh uint))
   (get-block-info? burnchain-header-hash bh))
 
+;; (define-read-only (get-block-info (h uint))
+;;  (ok (get-block-info? burnchain-header-hash h))
+;; )
+
 ;; Verify that a block header hashes to a burnchain header hash at a given height.
 ;; Returns true if so; false if not.
-(define-read-only (verify-block-header (headerbuff (buff 80)) (expected-block-height uint))
-    (match (get-bc-h-hash expected-block-height)
+(define-read-only (verify-block-header (headerbuff (buff 80)) (expectedblock-height uint))
+    (match (get-bc-h-hash expectedblock-height)
         bhh (is-eq bhh (reverse-buff32 (sha256 (sha256 headerbuff))))
         false
-    ))
+    )) 
 
-;; Get the txid of a transaction, but big-endian.
+;; Get the txid of a transaction, but big-endian.7
 ;; This is the reverse of what you see on block explorers.
 (define-read-only (get-reversed-txid (tx (buff 1024)))
     (sha256 (sha256 tx)))
@@ -749,7 +753,8 @@
 )
 
 (define-read-only (concat-header (block { version: (buff 4), parent: (buff 32), merkle-root: (buff 32), timestamp: (buff 4), nbits: (buff 4), nonce: (buff 4), height: uint }))
-  (concat (concat (concat (concat (concat (get version block) (get parent block)) (get merkle-root block)) (get timestamp block)) (get nbits block)) (get nonce block))
+  (concat (concat (concat (concat (concat (get version block) (get parent block))
+   (get merkle-root block)) (get timestamp block)) (get nbits block)) (get nonce block))
 )
 
 (define-read-only (concat-var (buffer (buff 256)))
@@ -777,18 +782,20 @@
       locktime: (buff 4)}))
  (unwrap-panic (as-max-len?  (concat (concat (concat (get version tx) (concat-ins (get ins tx))) (concat-outs (get outs tx))) (get locktime tx)) u1024)))
 
-;; (define-read-only (was-tx-mined (block { version: (buff 4), parent: (buff 32), merkle-root: (buff 32), timestamp: (buff 4), nbits: (buff 4), nonce: (buff 4), height: uint })
-;;  (tx (buff 1024)) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint }))
-;;     (if (verify-block-header (concat-header block) (get height block))
-;;         (verify-merkle-proof (get-reversed-txid tx) (get merkle-root block) proof)
-;;         (err u1)
-;;     )
-;; )
+;; why do we need to concat the block data to match the block header parameter
+(define-read-only (was-tx-mined (block { version: (buff 4), parent: (buff 32), merkle-root: (buff 32), 
+timestamp: (buff 4), nbits: (buff 4), nonce: (buff 4), height: uint })
+ (tx (buff 1024)) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint }))
+    (if (verify-block-header (concat-header block) (get height block))
+        (verify-merkle-proof (get-reversed-txid tx) (get merkle-root block) proof)
+        (err u1)
+    )
+)
 
-(define-public (was-tx-mined (block { version: (buff 4), parent: (buff 32), merkle-root: (buff 32), timestamp: (buff 4), nbits: (buff 4), nonce: (buff 4), height: uint }) 
+(define-public (was-tx-mined1 (block { version: (buff 4), parent: (buff 32), merkle-root: (buff 32), timestamp: (buff 4), nbits: (buff 4), nonce: (buff 4), height: uint }) 
  (tx (buff 1024)) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint }))
    (begin 
-   (unwrap! (unwrap-panic (some (verify-merkle-proof (get-reversed-txid tx) (get merkle-root block) proof))) (err u1))
+     (unwrap! (unwrap-panic (some (verify-merkle-proof (get-reversed-txid tx) (get merkle-root block) proof))) (err u1))
     (ok true)
    )
 ) 

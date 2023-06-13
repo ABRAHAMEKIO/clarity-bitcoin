@@ -636,6 +636,9 @@
     }))
 )
 
+;; burnchain-header-hash: This property returns a (buff 32) value containing 
+;; the header hash of the burnchain (Bitcoin) block that selected 
+;; the Stacks block at the given Stacks chain height.
 (define-read-only (get-bc-h-hash (bh uint))
   (get-block-info? burnchain-header-hash bh))
 
@@ -650,6 +653,12 @@
         bhh (is-eq bhh (reverse-buff32 (sha256 (sha256 headerbuff))))
         false
     )) 
+;; checks if the blockheader corresponds with the burnchain-header-hash at a given height
+;; (define-read-only (verify-block-header1 (headerbuff (buff 80)) (expectedblock-height uint))
+;;     (if (is-eq headerbuff (get-bc-h-hash expectedblock-height))
+;;         (ok (is-eq bhh (reverse-buff32 (sha256 (sha256 headerbuff)))))
+;;         false
+;;     )) 
 
 ;; Get the txid of a transaction, but big-endian.7
 ;; This is the reverse of what you see on block explorers.
@@ -719,14 +728,17 @@
 ;; Returns (ok true) if the proof is valid.
 ;; Returns (ok false) if the proof is invalid.
 ;; Returns (err ERR-PROOF-TOO-SHORT) if the proof's hashes aren't long enough to link the txid to the merkle root.
-(define-read-only (verify-merkle-proof (reversed-txid (buff 32)) (merkle-root (buff 32)) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint }))
+(define-read-only (verify-merkle-proof (reversed-txid (buff 32)) (merkle-root (buff 32)) (proof { tx-index: uint,
+  hashes: (list 12 (buff 32)), tree-depth: uint }))
     (if (> (get tree-depth proof) (len (get hashes proof)))
         (err ERR-PROOF-TOO-SHORT)
         (ok
           (get verified
               (fold inner-merkle-proof-verify
                   (list u0 u1 u2 u3 u4 u5 u6 u7 u8 u9 u10 u11)
-                  { path: (+ (pow u2 (get tree-depth proof)) (get tx-index proof)), root-hash: merkle-root, proof-hashes: (get hashes proof), cur-hash: reversed-txid, tree-depth: (get tree-depth proof), verified: false }))
+                  { path: (+ (pow u2 (get tree-depth proof)) (get tx-index proof)),
+                   root-hash: merkle-root, proof-hashes: (get hashes proof), cur-hash: reversed-txid,
+                    tree-depth: (get tree-depth proof), verified: false }))
         )
     )
 )
@@ -745,7 +757,8 @@
 ;; Returns (ok true) if the proof checks out.
 ;; Returns (ok false) if not.
 ;; Returns (err ERR-PROOF-TOO-SHORT) if the proof doesn't contain enough intermediate hash nodes in the merkle tree.
-(define-read-only (was-tx-mined-compact (block { header: (buff 80), height: uint }) (tx (buff 1024)) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint }))
+(define-read-only (was-tx-mined-compact (block { header: (buff 80), height: uint }) (tx (buff 1024)) 
+(proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint }))
     (if (verify-block-header (get header block) (get height block))
         (verify-merkle-proof (get-reversed-txid tx) (reverse-buff32 (get merkle-root (try! (parse-block-header (get header block))))) proof)
         (ok false)
@@ -783,6 +796,8 @@
  (unwrap-panic (as-max-len?  (concat (concat (concat (get version tx) (concat-ins (get ins tx))) (concat-outs (get outs tx))) (get locktime tx)) u1024)))
 
 ;; why do we need to concat the block data to match the block header parameter
+;;-because the blockheader comprizes of the time nonce nbits merke root and height
+;; -merkle root is derived from the hashes of all transactions in the block
 (define-read-only (was-tx-mined (block { version: (buff 4), parent: (buff 32), merkle-root: (buff 32), 
 timestamp: (buff 4), nbits: (buff 4), nonce: (buff 4), height: uint })
  (tx (buff 1024)) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint }))
@@ -792,10 +807,21 @@ timestamp: (buff 4), nbits: (buff 4), nonce: (buff 4), height: uint })
     )
 )
 
-(define-public (was-tx-mined1 (block { version: (buff 4), parent: (buff 32), merkle-root: (buff 32), timestamp: (buff 4), nbits: (buff 4), nonce: (buff 4), height: uint }) 
+;; verifies if the transaction's merkle proof links to the block header's merkle root.
+(define-public (was-tx-mined-verify-merkleproof (block { version: (buff 4), parent: (buff 32), merkle-root: (buff 32), timestamp: (buff 4), nbits: (buff 4), nonce: (buff 4), height: uint }) 
  (tx (buff 1024)) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint }))
    (begin 
      (unwrap! (unwrap-panic (some (verify-merkle-proof (get-reversed-txid tx) (get merkle-root block) proof))) (err u1))
-    (ok true)
+    (ok {data: block,event: true,proof: proof})
    )
 ) 
+
+;; verifies that the blockheader  corresponds with the block that was mined at the given height
+(define-read-only (was-tx-mined-verify-blockheader (block { version: (buff 4), parent: (buff 32), merkle-root: (buff 32), timestamp: (buff 4), nbits: (buff 4), nonce: (buff 4), height: uint }) 
+ (tx (buff 1024)) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint }))
+   (if 
+   (verify-block-header (concat-header block) (get height block))
+     (ok true)
+    (err u2))
+ )
+
